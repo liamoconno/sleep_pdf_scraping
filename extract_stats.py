@@ -755,7 +755,7 @@ def main():
 
     # Get list of pdfs in pdfs folder
     pdf_list, out_dict = get_pdf_list()
-    print(out_dict)
+
     # Process each pdf
     for i, path in enumerate(pdf_list):
         print(f'Processing pdf {i+1}/{len(pdf_list)}. \n Path: {path} \n')
