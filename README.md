@@ -9,23 +9,16 @@ Works on Windows, no promises for other OS.
 To run for the first time, you will have to create an environment
 and install dependencies. To do this, [first install conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html).
 
-Next, in Anaconda prompt run:
+Next, in Anaconda prompt navigate to the project directory and run:
 
 ~~~
-$ conda create --name <env> --file req.txt
-~~~
-
-in the current directory, where `<env>` is your environment name. For example, if you want to call the
-environment "sleep_env", run:
-
-~~~
-$ conda create --name sleep_env --file req.txt
+$ conda env create -f req.yml
 ~~~
 
 Then, activate the environment by running:
 
 ~~~
-$ conda activate <env>
+$ conda activate sleep_env
 ~~~
 
 
