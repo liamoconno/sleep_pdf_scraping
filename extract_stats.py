@@ -34,10 +34,11 @@ def get_pdf_list():
     for pdf in file_list:
         # make sure they're all pdfs
         if not pdf.endswith('.pdf'):
-            raise SystemError(f'Expected only pdfs. Got {pdf}')
-        path = root + "\\PDFs\\" + pdf
-        out.append(path)
-        out_dict["fname"].append(pdf)
+            print(f'WARNING: Expected only pdfs. Got {pdf}')
+        else:
+            path = root + "\\PDFs\\" + pdf
+            out.append(path)
+            out_dict["fname"].append(pdf)
     return out, out_dict
 
 
@@ -138,44 +139,14 @@ def split_column(column):
     return out
 
 def clean_page_nums(text):
-    '''
-    Helper function to remove page number footer from text
-    
-    Params:
-        text (str): The string to be cleaned
-    Returns:
-        str: the cleaned string
-    '''
     regex = "Page \d* of \d*"
     return re.sub(regex, '', text)
 
 def table_data_help(table, offset, row_width, header_width):
-    '''
-    Helper function to get data from a table read in as a list
-    
-    Params:
-        table (list(str)): The table to be processed
-        offset (int): Where to start reading from
-        row_width (int): How many items in a row
-        header_width (int): How many items per row to skip
-    Returns:
-        list(str): the cleaned table
-    '''
     values = [item for index, item in enumerate(table[offset:]) if (index % row_width) < row_width - header_width]
     return values
 
 def optional_field_help(txt, header, values):
-    '''
-    Helper function to deal with the individual fields
-    which only appear on some forms
-    
-    Params:
-        txt (str): The text to parse
-        header (str): The header to match from the form
-        values (list(str)): The list of output values
-    Returns:
-        list: the modified values list
-    '''
     if header in txt:
         val = txt.split(header)
         values.append(val[0])
@@ -185,6 +156,19 @@ def optional_field_help(txt, header, values):
         values.append('-')
         
     return values
+
+'''
+Returns a list of all numeric values or '-' values in an input list
+'''
+def get_values_helper(table):
+    values = []
+    for s in table:
+        s = s.strip()
+        if s == '-' or re.match('\d+.?\d*', s):
+            values.append(s)
+    return values
+
+    
 #===============================INDIVIDUAL FIELD PROCESSING====================================
 # TODO: MOVE THIS TO ANOTHER FILE
 def extract_text_between_headings(pdf_path, start_heading, end_heading):
@@ -355,20 +339,8 @@ def get_individual_headers_var_names():
 
 #===============================TABLE PROCESSING FUNCTIONS=====================================
 # TODO: MOVE THIS TO ANOTHER FILE
-# TODO: Organize this more logically. Could write a general function to extract data from most tables and then
-#   could deal with outliers on a case by case basis
-# TODO: Comment this
-
-# Apologies this is a mess
-def get_table_list(pdf_path):
-    '''
-    Read in the unprocessed values of each table
-    Params:
-        pdf_path (str): the path to the pdf of interest
-    Returns:
-        list(list(str)): a list of lists where each of the sublists is an unprocessed table
-    '''   
-    # The headers we will use to pull data
+# N.B. I realize hardcoding this is messy but hopefully if something goes wrong it will break and alert the user
+def get_table_list(pdf_path):   
     pdf_headers = [
         "STAGE DISTRIBUTION",
         "AROUSALS",
@@ -389,8 +361,6 @@ def get_table_list(pdf_path):
     ]
     
     table_list = []
-    
-    # Pull all the text between each two headers and split it into a list on the new line character
     for i in range(len(pdf_headers) - 1):
         txt = extract_text_between_headings(pdf_path, pdf_headers[i], pdf_headers[i+1])
         txt = remove_pg_header(txt)
@@ -404,13 +374,6 @@ def get_table_list(pdf_path):
 def extract_sleep_params(pdf_path, out_dict, idx):
     '''
     Gets info from the Sleep Parameters sheet, updates the output dictionary.
-    
-    Params:
-        pdf_path (str): The path to the pdf to be processed
-        out_dict (dict(str, str)): The dictionary where output values are stored
-        idx (int): the document index
-    Returns:
-        dict(str, str): The updated output dictionary
     '''
     pdf_headers = [
     "Time in Bed (TIB):",
@@ -445,16 +408,6 @@ def extract_sleep_params(pdf_path, out_dict, idx):
     return out_dict
 
 def extract_stage_dist(table_list, out_dict, idx):
-    '''
-    Gets info from the stage distribution table, updates the output dictionary.
-    
-    Params:
-        pdf_path (str): The path to the pdf to be processed
-        out_dict (dict(str, str)): The dictionary where output values are stored
-        idx (int): the document index
-    Returns:
-        dict(str, str): The updated output dictionary
-    '''
     field_names = [
     # stage distribution
     'time_stage_n1', 'percentage_stage_n1', 'latency_stage_n1',
@@ -468,31 +421,13 @@ def extract_stage_dist(table_list, out_dict, idx):
     ]
 
     table = table_list[0]
-    # values = []
-    # values = table_data_help(table, 4, 4, 1) 
-    # values = values[:-2]
-    # del values[-2]
     
-    values = []
-    for s in table:
-        s = s.strip()
-        if s == '-' or re.match('\d+.?\d*', s):
-            values.append(s)
+    values = get_values_helper(table)
     enter_values(field_names, values, out_dict, idx)
     return out_dict
 
 
 def extract_arousals(table_list, out_dict, idx):
-    '''
-    Gets info from the arousals table, updates the output dictionary.
-    
-    Params:
-        pdf_path (str): The path to the pdf to be processed
-        out_dict (dict(str, str)): The dictionary where output values are stored
-        idx (int): the document index
-    Returns:
-        dict(str, str): The updated output dictionary
-    '''
     field_headers = [   
     # arousals
     'number_arousals', 'number_arousals_rem', 
@@ -505,24 +440,14 @@ def extract_arousals(table_list, out_dict, idx):
     field_names = ['total_' + v for v in field_headers] + ['apnea_hypopnea_' + v for v in field_headers] + ['resp_dist_' + v for v in field_headers]
 
     table = table_list[1]
-    values = table_data_help(table, 10, 8, 2)
+    # values = table_data_help(table, 10, 8, 2)
     
+    values = get_values_helper(table)
     enter_values(field_names, values, out_dict, idx)
-    
     return out_dict
 
 
 def extract_leg_mvmts(table_list, out_dict, idx):
-    '''
-    Gets info from the leg movements table, updates the output dictionary.
-    
-    Params:
-        pdf_path (str): The path to the pdf to be processed
-        out_dict (dict(str, str)): The dictionary where output values are stored
-        idx (int): the document index
-    Returns:
-        dict(str, str): The updated output dictionary
-    '''
     field_names = [
     # periodic leg movements
     'number_periodic_limb_movements', 'index_periodic_limb_movements',
@@ -530,23 +455,13 @@ def extract_leg_mvmts(table_list, out_dict, idx):
     ]
 
     table = table_list[2]
-    values = table[4:6] + table[7:9]
-    
+    # values = table[4:6] + table[7:9]
+    values = get_values_helper(table)
     enter_values(field_names, values, out_dict, idx)
     return out_dict
 
 
 def extract_resp_analysis(table_list, out_dict, idx):
-    '''
-    Gets info from the respiratory analysis table, updates the output dictionary.
-    
-    Params:
-        pdf_path (str): The path to the pdf to be processed
-        out_dict (dict(str, str)): The dictionary where output values are stored
-        idx (int): the document index
-    Returns:
-        dict(str, str): The updated output dictionary
-    '''
     field_names = [    
     # minutes sleep/body position
     'time_supine', 'percent_supine', 'time_non_supine', 'percent_non_supine',
@@ -557,22 +472,12 @@ def extract_resp_analysis(table_list, out_dict, idx):
     table = table_list[3]
     values = table_data_help(table, 11, 5, 1)
     values = values[:12]
-    
+    # values = get_values_helper(table)
     enter_values(field_names, values, out_dict, idx)
     return out_dict
 
 def extract_baseline_ranges(table_list, out_dict, idx):
-    '''
-    Gets info from the baseline ranges table, updates the output dictionary.
-    
-    Params:
-        pdf_path (str): The path to the pdf to be processed
-        out_dict (dict(str, str)): The dictionary where output values are stored
-        idx (int): the document index
-    Returns:
-        dict(str, str): The updated output dictionary
-    '''
-    
+
     table = table_list[4]
     
     if 'Transcutaneous CO2 ' in table:
@@ -601,17 +506,6 @@ def extract_baseline_ranges(table_list, out_dict, idx):
     return out_dict
 
 def extract_spo2_ranges_sleep(table_list, out_dict, idx):
-    '''
-    Gets info from the SpO2 ranges table, updates the output dictionary.
-    
-    Params:
-        pdf_path (str): The path to the pdf to be processed
-        out_dict (dict(str, str)): The dictionary where output values are stored
-        idx (int): the document index
-    Returns:
-        dict(str, str): The updated output dictionary
-    '''
-    
     field_names = [# SpO2 RANGES IN SLEEP
     'time_sleep_spo2_96_100', 'percent_sleep_spo2_96_100', 'time_sleep_gteq_spo2_96_100', 'percent_sleep_gteq_spo2_96_100',
     'time_sleep_spo2_92_96', 'percent_sleep_spo2_92_96', 'time_sleep_gteq_spo2_92_96', 'percent_sleep_gteq_spo2_92_96',
@@ -633,16 +527,6 @@ def extract_spo2_ranges_sleep(table_list, out_dict, idx):
 
 
 def extract_resp_events(table_list, out_dict, idx):
-    '''
-    Gets info from the respiratory events table, updates the output dictionary.
-    
-    Params:
-        pdf_path (str): The path to the pdf to be processed
-        out_dict (dict(str, str)): The dictionary where output values are stored
-        idx (int): the document index
-    Returns:
-        dict(str, str): The updated output dictionary
-    '''
     field_headers = [   
     # respiratory events
     'min_length',
@@ -669,16 +553,6 @@ def extract_resp_events(table_list, out_dict, idx):
     
 
 def extract_desat_table(table_list, out_dict, idx):
-    '''
-    Gets info from the desaturation table, updates the output dictionary.
-    
-    Params:
-        pdf_path (str): The path to the pdf to be processed
-        out_dict (dict(str, str)): The dictionary where output values are stored
-        idx (int): the document index
-    Returns:
-        dict(str, str): The updated output dictionary
-    '''
     field_headers = [   
     # respiratory events
     'avg_o2_saturation',
@@ -701,16 +575,6 @@ def extract_desat_table(table_list, out_dict, idx):
     return out_dict
     
 def extract_etco2_vals(table_list, out_dict, idx):
-    '''
-    Gets info from the ETCO2 values table, updates the output dictionary.
-    
-    Params:
-        pdf_path (str): The path to the pdf to be processed
-        out_dict (dict(str, str)): The dictionary where output values are stored
-        idx (int): the document index
-    Returns:
-        dict(str, str): The updated output dictionary
-    '''
     field_names = [
     'time_wake_tcco2_20_30', 'percent_wake_tcco2_20_30', 'time_nrem_tcco2_20_30', 'percent_nrem_tcco2_20_30', 'time_rem_tcco2_20_30', 'percent_rem_tcco2_20_30', 'time_total_tcco2_20_30', 'percent_total_tcco2_20_30',
     'time_wake_tcco2_30_45', 'percent_wake_tcco2_30_45', 'time_nrem_tcco2_30_45', 'percent_nrem_tcco2_30_45', 'time_rem_tcco2_30_45', 'percent_rem_tcco2_30_45', 'time_total_tcco2_30_45', 'percent_total_tcco2_30_45',
@@ -731,16 +595,6 @@ def extract_etco2_vals(table_list, out_dict, idx):
     
 
 def extract_resp_events_stage(table_list, out_dict, idx):
-    '''
-    Gets info from the respiratory events by stage table, updates the output dictionary.
-    
-    Params:
-        pdf_path (str): The path to the pdf to be processed
-        out_dict (dict(str, str)): The dictionary where output values are stored
-        idx (int): the document index
-    Returns:
-        dict(str, str): The updated output dictionary
-    '''
     field_headers = [   
     # respiratory events
     'total_obst',
@@ -765,17 +619,6 @@ def extract_resp_events_stage(table_list, out_dict, idx):
     return out_dict
     
 def extract_resp_events_body_position(table_list, out_dict, idx):
-    '''
-    Gets info from the respiratory events by body position table, updates the output dictionary.
-    
-    Params:
-        pdf_path (str): The path to the pdf to be processed
-        out_dict (dict(str, str)): The dictionary where output values are stored
-        idx (int): the document index
-    Returns:
-        dict(str, str): The updated output dictionary
-    '''
-    
     field_headers = [   
     # respiratory events
     'total_obst',
@@ -800,16 +643,6 @@ def extract_resp_events_body_position(table_list, out_dict, idx):
     return out_dict
     
 def extract_resp_events_stage_pos(table_list, out_dict, idx):
-    '''
-    Gets info from the respiratory events by stage and body position table, updates the output dictionary.
-    
-    Params:
-        pdf_path (str): The path to the pdf to be processed
-        out_dict (dict(str, str)): The dictionary where output values are stored
-        idx (int): the document index
-    Returns:
-        dict(str, str): The updated output dictionary
-    '''
     field_headers = [   
     # respiratory events
     'total_obst',
@@ -839,16 +672,6 @@ def extract_resp_events_stage_pos(table_list, out_dict, idx):
     return out_dict
     
 def extract_summary_table(table_list, out_dict, idx):
-    '''
-    Gets info from the summary table, updates the output dictionary.
-    
-    Params:
-        pdf_path (str): The path to the pdf to be processed
-        out_dict (dict(str, str)): The dictionary where output values are stored
-        idx (int): the document index
-    Returns:
-        dict(str, str): The updated output dictionary
-    '''
     field_names = [
     'number_total_respiratory_events', 'index_total_respiratory_events', 'minimum_length_total_respiratory_events', 'maximum_length_total_respiratory_events',
     'number_obstructive_respiratory_events', 'index_obstructive_respiratory_events', 'minimum_length_obstructive_respiratory_events', 'maximum_length_obstructive_respiratory_events',
@@ -892,17 +715,6 @@ def extract_summary_table(table_list, out_dict, idx):
     return out_dict
     
 def extract_periodic_breathing(table_list, out_dict, idx):
-    '''
-    Gets info from the periodic breathing table, updates the output dictionary.
-    
-    Params:
-        pdf_path (str): The path to the pdf to be processed
-        out_dict (dict(str, str)): The dictionary where output values are stored
-        idx (int): the document index
-    Returns:
-        dict(str, str): The updated output dictionary
-    '''
-    
     field_headers = [   
     # periodic breathing
     'periodic_breathing_entire_study',
@@ -920,16 +732,6 @@ def extract_periodic_breathing(table_list, out_dict, idx):
     return out_dict
 
 def extract_min_o2(table_list, out_dict, idx):
-    '''
-    Gets info from the minimum oxygen table, updates the output dictionary.
-    
-    Params:
-        pdf_path (str): The path to the pdf to be processed
-        out_dict (dict(str, str)): The dictionary where output values are stored
-        idx (int): the document index
-    Returns:
-        dict(str, str): The updated output dictionary
-    '''
     field_names = [
     'min_o2_sat_entire_study',
     'min_o2_sat_rem',
@@ -985,6 +787,32 @@ def get_individual_fields(path, out_dict, idx):
     return out_dict
 
 
+# def get_compound_fields(path, out_dict, idx):
+#     table_list = get_table_list(path)
+#     out_dict = extract_sleep_params(path, out_dict, idx)
+#     out_dict = extract_stage_dist(table_list, out_dict, idx)
+#     out_dict = extract_arousals(table_list, out_dict, idx)
+#     out_dict = extract_leg_mvmts(table_list, out_dict, idx)
+#     out_dict = extract_resp_analysis(table_list, out_dict, idx)
+#     out_dict = extract_baseline_ranges(table_list, out_dict, idx)
+#     out_dict = extract_spo2_ranges_sleep(table_list, out_dict, idx)
+#     out_dict = extract_resp_events(table_list, out_dict, idx)
+#     out_dict = extract_desat_table(table_list, out_dict, idx)
+#     out_dict = extract_etco2_vals(table_list, out_dict, idx)
+#     out_dict = extract_resp_events_stage(table_list, out_dict, idx)
+#     out_dict = extract_resp_events_body_position(table_list, out_dict, idx)
+#     out_dict = extract_resp_events_stage_pos(table_list, out_dict, idx)
+#     out_dict = extract_summary_table(table_list, out_dict, idx)
+#     out_dict = extract_periodic_breathing(table_list, out_dict, idx)
+#     out_dict = extract_min_o2(table_list, out_dict, idx)
+    
+    
+    
+    
+    
+    
+    
+
 def get_compound_fields(path, out_dict, idx):
     '''
     Gets all data from tables
@@ -997,141 +825,119 @@ def get_compound_fields(path, out_dict, idx):
         dict(str, any): the modified output dictionary
     '''
     table_list = get_table_list(path)
-    out_dict = extract_sleep_params(path, out_dict, idx)
-    out_dict = extract_stage_dist(table_list, out_dict, idx)
-    out_dict = extract_arousals(table_list, out_dict, idx)
-    out_dict = extract_leg_mvmts(table_list, out_dict, idx)
-    out_dict = extract_resp_analysis(table_list, out_dict, idx)
-    out_dict = extract_baseline_ranges(table_list, out_dict, idx)
-    out_dict = extract_spo2_ranges_sleep(table_list, out_dict, idx)
-    out_dict = extract_resp_events(table_list, out_dict, idx)
-    out_dict = extract_desat_table(table_list, out_dict, idx)
-    out_dict = extract_etco2_vals(table_list, out_dict, idx)
-    out_dict = extract_resp_events_stage(table_list, out_dict, idx)
-    out_dict = extract_resp_events_body_position(table_list, out_dict, idx)
-    out_dict = extract_resp_events_stage_pos(table_list, out_dict, idx)
-    out_dict = extract_summary_table(table_list, out_dict, idx)
-    out_dict = extract_periodic_breathing(table_list, out_dict, idx)
-    out_dict = extract_min_o2(table_list, out_dict, idx)
+    error = False
     
-    return(out_dict)
+    try:
+        out_dict = extract_sleep_params(path, out_dict, idx)
+    except Exception as e:
+        print('error sleep_params')
+        error = True
+        print(e)
+        
+    try:
+        out_dict = extract_stage_dist(table_list, out_dict, idx)
+    except Exception as e:
+        print('error stage dist')
+        error = True
+        print(e)
+    try: 
+        out_dict = extract_arousals(table_list, out_dict, idx)
+    except Exception as e:
+        print('error arousals')
+        error = True
+        print(e)
     
-    
-    
-    
-    
-    
-    
-
-# def get_compound_fields(path, out_dict, idx):
-#     '''
-#     Gets all data from tables
-
-#     Args:
-#         path (str): The path to the pdf
-#         out_dict(dict(str, any)): a dictionary to store the output data
-#         idx (int): doc index
-#     Returns:
-#         dict(str, any): the modified output dictionary
-#     '''
-#     table_list = get_table_list(path)
-    
-    
-#     try:
-#         out_dict = extract_sleep_params(path, out_dict, idx)
-#     except Exception as e:
-#         print('error sleep_params')
-#         print(e)
+    try:
+        out_dict = extract_leg_mvmts(table_list, out_dict, idx)
+    except Exception as e:
+        print('error leg mvmts')
+        error = True
+        print(e)
+    try:
+        out_dict = extract_resp_analysis(table_list, out_dict, idx)
+    except Exception as e:
+        print('error resp analysis')
+        error = True
+        print(e)
         
-#     try:
-#         out_dict = extract_stage_dist(table_list, out_dict, idx)
-#     except Exception as e:
-#         print('error stage dist')
-#         print(e)
-#     try: 
-#         out_dict = extract_arousals(table_list, out_dict, idx)
-#     except Exception as e:
-#         print('error arousals')
-#         print(e)
-    
-#     try:
-#         out_dict = extract_leg_mvmts(table_list, out_dict, idx)
-#     except Exception as e:
-#         print('error leg mvmts')
-#         print(e)
-#     try:
-#         out_dict = extract_resp_analysis(table_list, out_dict, idx)
-#     except Exception as e:
-#         print('error resp analysis')
-#         print(e)
+    try: 
+        out_dict = extract_baseline_ranges(table_list, out_dict, idx)
+    except Exception as e:
+        print('error baseline')
+        error = True
+        print(e)
         
-#     try: 
-#         out_dict = extract_baseline_ranges(table_list, out_dict, idx)
-#     except Exception as e:
-#         print('error baseline')
-#         print(e)
+    try: 
+        out_dict = extract_spo2_ranges_sleep(table_list, out_dict, idx)
+    except Exception as e:
+        print('error spo2')
+        error = True
+        print(e)
         
-#     try: 
-#         out_dict = extract_spo2_ranges_sleep(table_list, out_dict, idx)
-#     except Exception as e:
-#         print('error spo2')
-#         print(e)
+    try:
+        out_dict = extract_resp_events(table_list, out_dict, idx)
+    except Exception as e:
+        print('error resp events')
+        error = True
+        print(e)
         
-#     try:
-#         out_dict = extract_resp_events(table_list, out_dict, idx)
-#     except Exception as e:
-#         print('error resp events')
-#         print(e)
+    try:
+        out_dict = extract_desat_table(table_list, out_dict, idx)
+    except Exception as e:
+        print('error desat')
+        error = True
+        print(e)
         
-#     try:
-#         out_dict = extract_desat_table(table_list, out_dict, idx)
-#     except Exception as e:
-#         print('error desat')
-#         print(e)
+    try:
+        out_dict = extract_etco2_vals(table_list, out_dict, idx)
+    except Exception as e:
+        print('error etco2')
+        error = True
+        print(e)
         
-#     try:
-#         out_dict = extract_etco2_vals(table_list, out_dict, idx)
-#     except Exception as e:
-#         print('error etco2')
-#         print(e)
+    try:
+        out_dict = extract_resp_events_stage(table_list, out_dict, idx)
+    except Exception as e:
+        print('error resp events stage')
+        error = True
+        print(e)
         
-#     try:
-#         out_dict = extract_resp_events_stage(table_list, out_dict, idx)
-#     except Exception as e:
-#         print('error resp events stage')
-#         print(e)
+    try:
+        out_dict = extract_resp_events_body_position(table_list, out_dict, idx)
+    except Exception as e:
+        print('error body pos')
+        error = True
+        print(e)
         
-#     try:
-#         out_dict = extract_resp_events_body_position(table_list, out_dict, idx)
-#     except Exception as e:
-#         print('error body pos')
-#         print(e)
+    try:
+        out_dict = extract_resp_events_stage_pos(table_list, out_dict, idx)
+    except Exception as e:
+        print('error stage body pos')
+        error = True
+        print(e)
         
-#     try:
-#         out_dict = extract_resp_events_stage_pos(table_list, out_dict, idx)
-#     except Exception as e:
-#         print('error stage body pos')
-#         print(e)
+    try:
+        out_dict = extract_summary_table(table_list, out_dict, idx)
+    except Exception as e:
+        print('error summary')
+        error = True
+        print(e)
         
-#     try:
-#         out_dict = extract_summary_table(table_list, out_dict, idx)
-#     except Exception as e:
-#         print('error summary')
-#         print(e)
+    try:
+        out_dict = extract_periodic_breathing(table_list, out_dict, idx)
+    except Exception as e:
+        print('error periodic breathing')
+        error = True
+        print(e)
         
-#     try:
-#         out_dict = extract_periodic_breathing(table_list, out_dict, idx)
-#     except Exception as e:
-#         print('error periodic breathing')
-#         print(e)
+    try:
+        out_dict = extract_min_o2(table_list, out_dict, idx)
+    except Exception as e:
+        print('error min o2')
+        error = True
+        print(e)
         
-#     try:
-#         out_dict = extract_min_o2(table_list, out_dict, idx)
-#     except Exception as e:
-#         print('error min o2')
-#         print(e)
-        
-#     return out_dict
+    return out_dict, error
 
 
 
@@ -1147,9 +953,9 @@ def process_pdf(path, out_dict, idx):
     '''
     
     out_dict = get_individual_fields(path, out_dict, idx)
-    out_dict = get_compound_fields(path, out_dict, idx)
+    out_dict, error = get_compound_fields(path, out_dict, idx)
     
-    return out_dict
+    return out_dict, error
 
 #===============================OUTPUT=========================================================
 def save_spreadsheet(out_dict):
@@ -1169,23 +975,26 @@ def main():
     '''
     Main function. Processes all pdfs in PDFs folder
     '''
-
+    
     # Get list of pdfs in pdfs folder
     pdf_list, out_dict = get_pdf_list()
-
+    problem_pdfs = []
     # Process each pdf
     for i, path in enumerate(pdf_list):
         print(f'Processing pdf {i+1}/{len(pdf_list)}. \n Path: {path} \n')
         assert path.lower().endswith('.pdf')
+        out_dict, error = process_pdf(path, out_dict, i)
         
-        process_pdf(path, out_dict, i)
-        
-        # try:    
-        #     process_pdf(path, out_dict, i)
-        # except:
-        #     print(f"ERROR processing pdf {i+1}")
+        if error:
+            problem_pdfs.append(path)
+        # Save data as we go
+        save_spreadsheet(out_dict)
     
-    save_spreadsheet(out_dict)
+    # Print out the pdfs that ran into errors
+    if not problem_pdfs:
+        print('No errors processing PDFs')
+    else:
+        print(f'Error processing PDFs: {problem_pdfs}')
 
 
 
