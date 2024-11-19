@@ -21,12 +21,12 @@ Then, activate the environment by running:
 conda activate sleep_env
 ~~~
 
-## To update:
+## To pull changes:
 
 In GitBash navigate to the project directory by running
 
 ~~~
-cd [Path to Sleep Scraping Folder]\sleep_pdf_scraping
+cd [Path to Sleep Scraping Folder]/sleep_pdf_scraping
 ~~~
 
 Then, run
