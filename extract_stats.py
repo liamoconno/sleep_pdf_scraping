@@ -351,20 +351,27 @@ def get_table_list(pdf_path):
         "\nRESPIRATORY EVENTS",
         "TABLE OF DESATURATION",
         "TABLE OF ETCO2 VALUES",
+        "TABLE OF TcCO2 VALUES",
         "RESPIRATORY EVENTS BY STAGE",
         "RESPIRATORY EVENTS BY BODY POSITION",
         "RESPIRATORY EVENTS BY STAGE AND POSITION",
         "APNEA/HYPOPNEA SUMMARY",
-        "PERIODIC BREATHING",
-        "MINIMUM OXYGEN",
+        "Total Time \n(min) ",
         ""
     ]
     
     table_list = []
     for i in range(len(pdf_headers) - 1):
         txt = extract_text_between_headings(pdf_path, pdf_headers[i], pdf_headers[i+1])
+        
+        # Hacky fix for variation in pdfs
+        if txt == '' and pdf_headers[i] == "TABLE OF ETCO2 VALUES":
+            txt = extract_text_between_headings(pdf_path, "TABLE OF EtCO2 VALUES", pdf_headers[i+1])
+                
         txt = remove_pg_header(txt)
         txt = clean_page_nums(txt)
+        
+        
         table_list.append(txt.split('\n'))
         
     return table_list 
@@ -408,20 +415,28 @@ def extract_sleep_params(pdf_path, out_dict, idx):
     return out_dict
 
 def extract_stage_dist(table_list, out_dict, idx):
-    field_names = [
-    # stage distribution
-    'time_stage_n1', 'percentage_stage_n1', 'latency_stage_n1',
-    'time_stage_n2', 'percentage_stage_n2', 'latency_stage_n2',
-    'time_stage_3', 'percentage_stage_3', 'latency_stage_3',
-    'time_stage_4', 'percentage_stage_4', 'latency_stage_4',
-    'time_stage_n3', 'percentage_stage_n3', 'latency_stage_n3',
-    'time_stage_rem', 'percentage_stage_rem', 'latency_stage_rem',
-    'time_stage_nrem', 'percentage_stage_nrem',
-    'time_stage_wake'
-    ]
-
-    table = table_list[0]
     
+    table = table_list[0]
+    if 'Transitional' in [s.strip() for s in table]:
+        field_names = [
+            'time_stage_transitional', 'percentage_stage_transitional', 'latency_stage_transitional',
+            'time_stage_rem', 'percentage_stage_rem', 'latency_stage_rem',
+            'time_stage_nrem', 'percentage_stage_nrem',
+            'time_stage_wake'
+        ]
+        
+    else:
+        field_names = [
+        # stage distribution
+        'time_stage_n1', 'percentage_stage_n1', 'latency_stage_n1',
+        'time_stage_n2', 'percentage_stage_n2', 'latency_stage_n2',
+        'time_stage_3', 'percentage_stage_3', 'latency_stage_3',
+        'time_stage_4', 'percentage_stage_4', 'latency_stage_4',
+        'time_stage_n3', 'percentage_stage_n3', 'latency_stage_n3',
+        'time_stage_rem', 'percentage_stage_rem', 'latency_stage_rem',
+        'time_stage_nrem', 'percentage_stage_nrem',
+        'time_stage_wake'
+        ]
     values = get_values_helper(table)
     enter_values(field_names, values, out_dict, idx)
     return out_dict
@@ -456,7 +471,7 @@ def extract_leg_mvmts(table_list, out_dict, idx):
 
     table = table_list[2]
     # values = table[4:6] + table[7:9]
-    values = get_values_helper(table)
+    values = get_values_helper(table)[:4]
     enter_values(field_names, values, out_dict, idx)
     return out_dict
 
@@ -470,9 +485,11 @@ def extract_resp_analysis(table_list, out_dict, idx):
     ]
     
     table = table_list[3]
-    values = table_data_help(table, 11, 5, 1)
-    values = values[:12]
+    # values = table_data_help(table, 11, 5, 1)
+    # values = values[:12]
     # values = get_values_helper(table)
+    values = [v.strip() for v in table if v.strip() == '-' or re.match('\d+.?\d*', v.strip())]
+    values = values[1:13]
     enter_values(field_names, values, out_dict, idx)
     return out_dict
 
@@ -480,7 +497,7 @@ def extract_baseline_ranges(table_list, out_dict, idx):
 
     table = table_list[4]
     
-    if 'Transcutaneous CO2 ' in table:
+    if 'Transcutaneous CO2 ' in table or 'TCO2 ' in table:
         field_headers = ["oxygen_saturation",
                     "respiratory_rate",
                     "tcCO2",
@@ -497,12 +514,39 @@ def extract_baseline_ranges(table_list, out_dict, idx):
 
     field_names = ['room_air_rem_' + v for v in field_headers] + ['room_air_nrem_' + v for v in field_headers] + ['cpap_o2_rem_' + v for v in field_headers] + ['cpap_o2_nrem_' + v for v in field_headers]
     
-    values = table_data_help(table, 8, 5, 1)
-    while len(values) < len(field_names):
-        values = values + ['-']
     
+    # values = table_data_help(table, 8, 5, 1)
+    # while len(values) < len(field_names):
+    #     values = values + ['-']
+    
+    values = [v.strip() for v in table if v.strip() == '-' or re.match('\d+-?\d*', v.strip())]
 
+    # Kinda hacky, deals with variations in the baseline ranges table: sometimes has an extra row, sometimes columns are not filled in
+    
+    if len(values) != len(field_names):
+        proc_vals = values
+        values = []
+        # 0 
+        table_type = 0
+        for i, s in enumerate(table):
+            if i+1 <len(table) and re.match('\d+-?\d*', s.strip()) and table[i + 1].strip() == '':
+                table_type = 1
+        
+        i = 0
+        if table_type:
+            while i + 1 < len(field_headers*2):
+                values = values + [proc_vals[i], proc_vals[i + 1], '-', '-']
+                i += 2
+                
+        else:
+            while i + 1 < len(field_headers*2):
+                values = values + ['-', '-', proc_vals[i], proc_vals[i + 1]]
+                i += 2
+                
+            
+        
     enter_values(field_names, values, out_dict, idx)
+        
     return out_dict
 
 def extract_spo2_ranges_sleep(table_list, out_dict, idx):
@@ -575,24 +619,59 @@ def extract_desat_table(table_list, out_dict, idx):
     return out_dict
     
 def extract_etco2_vals(table_list, out_dict, idx):
-    field_names = [
-    'time_wake_tcco2_20_30', 'percent_wake_tcco2_20_30', 'time_nrem_tcco2_20_30', 'percent_nrem_tcco2_20_30', 'time_rem_tcco2_20_30', 'percent_rem_tcco2_20_30', 'time_total_tcco2_20_30', 'percent_total_tcco2_20_30',
-    'time_wake_tcco2_30_45', 'percent_wake_tcco2_30_45', 'time_nrem_tcco2_30_45', 'percent_nrem_tcco2_30_45', 'time_rem_tcco2_30_45', 'percent_rem_tcco2_30_45', 'time_total_tcco2_30_45', 'percent_total_tcco2_30_45',
-    'time_wake_tcco2_45_50', 'percent_wake_tcco2_45_50', 'time_nrem_tcco2_45_50', 'percent_nrem_tcco2_45_50', 'time_rem_tcco2_45_50', 'percent_rem_tcco2_45_50', 'time_total_tcco2_45_50', 'percent_total_tcco2_45_50',
-    'time_wake_tcco2_50_55', 'percent_wake_tcco2_50_55', 'time_nrem_tcco2_50_55', 'percent_nrem_tcco2_50_55', 'time_rem_tcco2_50_55', 'percent_rem_tcco2_50_55', 'time_total_tcco2_50_55', 'percent_total_tcco2_50_55',
-    'time_wake_tcco2_55_60', 'percent_wake_tcco2_55_60', 'time_nrem_tcco2_55_60', 'percent_nrem_tcco2_55_60', 'time_rem_tcco2_55_60', 'percent_rem_tcco2_55_60', 'time_total_tcco2_55_60', 'percent_total_tcco2_55_60',
-    'time_wake_tcco2_60_65', 'percent_wake_tcco2_60_65', 'time_nrem_tcco2_60_65', 'percent_nrem_tcco2_60_65', 'time_rem_tcco2_60_65', 'percent_rem_tcco2_60_65', 'time_total_tcco2_60_65', 'percent_total_tcco2_60_65',
-    'time_wake_tcco2_lt_20_gt_65', 'percent_wake_tcco2_lt_20_gt_65', 'time_nrem_tcco2_lt_20_gt_65', 'percent_nrem_tcco2_lt_20_gt_65', 'time_rem_tcco2_lt_20_gt_65', 'percent_rem_tcco2_lt_20_gt_65', 'time_total_tcco2_lt_20_gt_65', 'percent_total_tcco2_lt_20_gt_65'
-    ]
-    
     table = table_list[8]
+
+    field_names = [
+        'time_wake_etco2_20_30', 'percent_wake_etco2_20_30', 'time_nrem_etco2_20_30', 'percent_nrem_etco2_20_30', 'time_rem_etco2_20_30', 'percent_rem_etco2_20_30', 'time_total_etco2_20_30', 'percent_total_etco2_20_30',
+        'time_wake_etco2_30_45', 'percent_wake_etco2_30_45', 'time_nrem_etco2_30_45', 'percent_nrem_etco2_30_45', 'time_rem_etco2_30_45', 'percent_rem_etco2_30_45', 'time_total_etco2_30_45', 'percent_total_etco2_30_45',
+        'time_wake_etco2_45_50', 'percent_wake_etco2_45_50', 'time_nrem_etco2_45_50', 'percent_nrem_etco2_45_50', 'time_rem_etco2_45_50', 'percent_rem_etco2_45_50', 'time_total_etco2_45_50', 'percent_total_etco2_45_50',
+        'time_wake_etco2_50_55', 'percent_wake_etco2_50_55', 'time_nrem_etco2_50_55', 'percent_nrem_etco2_50_55', 'time_rem_etco2_50_55', 'percent_rem_etco2_50_55', 'time_total_etco2_50_55', 'percent_total_etco2_50_55',
+        'time_wake_etco2_55_60', 'percent_wake_etco2_55_60', 'time_nrem_etco2_55_60', 'percent_nrem_etco2_55_60', 'time_rem_etco2_55_60', 'percent_rem_etco2_55_60', 'time_total_etco2_55_60', 'percent_total_etco2_55_60',
+        'time_wake_etco2_60_65', 'percent_wake_etco2_60_65', 'time_nrem_etco2_60_65', 'percent_nrem_etco2_60_65', 'time_rem_etco2_60_65', 'percent_rem_etco2_60_65', 'time_total_etco2_60_65', 'percent_total_etco2_60_65'
+        ]
+    
     values = table[27:]
     indices_to_remove = {8, 17, 26, 35, 44, 53, 54, 55}
     values = [item for index, item in enumerate(values) if index not in indices_to_remove]
     values = values[:56]
+    
+    if values == []:
+        print('   No ETCO2 Values table found \n')
+        return out_dict
+    
+    if len(values) == 56:
+        discarded_data_names = ['time_wake_etco2_lt_20_gt_65', 'percent_wake_etco2_lt_20_gt_65', 'time_nrem_etco2_lt_20_gt_65', 'percent_nrem_etco2_lt_20_gt_65', 'time_rem_etco2_lt_20_gt_65', 'percent_rem_etco2_lt_20_gt_65', 'time_total_etco2_lt_20_gt_65', 'percent_total_etco2_lt_20_gt_65']
+        field_names = field_names + discarded_data_names
+        
     enter_values(field_names, values, out_dict, idx)
     return out_dict
     
+def extract_tcco2_vals(table_list, out_dict, idx):
+    table = table_list[9]
+    field_names = [
+        'time_wake_tcco2_20_30', 'percent_wake_tcco2_20_30', 'time_nrem_tcco2_20_30', 'percent_nrem_tcco2_20_30', 'time_rem_tcco2_20_30', 'percent_rem_tcco2_20_30', 'time_total_tcco2_20_30', 'percent_total_tcco2_20_30',
+        'time_wake_tcco2_30_45', 'percent_wake_tcco2_30_45', 'time_nrem_tcco2_30_45', 'percent_nrem_tcco2_30_45', 'time_rem_tcco2_30_45', 'percent_rem_tcco2_30_45', 'time_total_tcco2_30_45', 'percent_total_tcco2_30_45',
+        'time_wake_tcco2_45_50', 'percent_wake_tcco2_45_50', 'time_nrem_tcco2_45_50', 'percent_nrem_tcco2_45_50', 'time_rem_tcco2_45_50', 'percent_rem_tcco2_45_50', 'time_total_tcco2_45_50', 'percent_total_tcco2_45_50',
+        'time_wake_tcco2_50_55', 'percent_wake_tcco2_50_55', 'time_nrem_tcco2_50_55', 'percent_nrem_tcco2_50_55', 'time_rem_tcco2_50_55', 'percent_rem_tcco2_50_55', 'time_total_tcco2_50_55', 'percent_total_tcco2_50_55',
+        'time_wake_tcco2_55_60', 'percent_wake_tcco2_55_60', 'time_nrem_tcco2_55_60', 'percent_nrem_tcco2_55_60', 'time_rem_tcco2_55_60', 'percent_rem_tcco2_55_60', 'time_total_tcco2_55_60', 'percent_total_tcco2_55_60',
+        'time_wake_tcco2_60_65', 'percent_wake_tcco2_60_65', 'time_nrem_tcco2_60_65', 'percent_nrem_tcco2_60_65', 'time_rem_tcco2_60_65', 'percent_rem_tcco2_60_65', 'time_total_tcco2_60_65', 'percent_total_tcco2_60_65'
+        ]
+    
+    values = table[27:]
+    indices_to_remove = {8, 17, 26, 35, 44, 53, 54, 55}
+    values = [item for index, item in enumerate(values) if index not in indices_to_remove]
+    values = values[:56]
+    
+    if values == []:
+        print('   No TcCO2 Values table found \n')
+        return out_dict
+    
+    if len(values) == 56:
+        discarded_data_names = ['time_wake_tcco2_lt_20_gt_65', 'percent_wake_tcco2_lt_20_gt_65', 'time_nrem_tcco2_lt_20_gt_65', 'percent_nrem_tcco2_lt_20_gt_65', 'time_rem_tcco2_lt_20_gt_65', 'percent_rem_tcco2_lt_20_gt_65', 'time_total_tcco2_lt_20_gt_65', 'percent_total_tcco2_lt_20_gt_65']
+        field_names = field_names + discarded_data_names
+    
+    enter_values(field_names, values, out_dict, idx)
+    return out_dict
 
 def extract_resp_events_stage(table_list, out_dict, idx):
     field_headers = [   
@@ -612,7 +691,7 @@ def extract_resp_events_stage(table_list, out_dict, idx):
 
     field_names = list(np.array(field_names).reshape(6,8).T.flatten())
 
-    table = table_list[9]
+    table = table_list[10]
     values = [v.strip() for v in table if re.match("-", v) or re.match('\d+.?\d*', v.strip())]
     
     enter_values(field_names, values, out_dict, idx)
@@ -636,7 +715,7 @@ def extract_resp_events_body_position(table_list, out_dict, idx):
 
     field_names = list(np.array(field_names).reshape(6,8).T.flatten())
     
-    table = table_list[10]
+    table = table_list[11]
     values = [v.strip() for v in table if re.match("-", v) or re.match('\d+.?\d*', v.strip())]
     
     enter_values(field_names, values, out_dict, idx)
@@ -661,7 +740,7 @@ def extract_resp_events_stage_pos(table_list, out_dict, idx):
 
     field_names = list(np.array(field_names).reshape(8,8).T.flatten())
     
-    table = table_list[11]
+    table = table_list[12]
     values = table[20:]
     values = [v.strip() for v in table if re.match("-", v) or re.match('\d+.?\d*', v.strip())]
     while len(values) < 64:
@@ -707,14 +786,24 @@ def extract_summary_table(table_list, out_dict, idx):
     'number_mixed_non_supine_respiratory_events', 'index_mixed_non_supine_respiratory_events', 'minimum_length_mixed_non_supine_respiratory_events', 'maximum_length_mixed_non_supine_respiratory_events',
     ]
     
-    table = table_list[12]
-
-    values = values = [v.strip() for v in table if v.strip() == '-' or re.match('\d+.?\d*', v.strip())]
-    
+    table = table_list[13]
+    values = [v.strip() for v in table if v.strip() == '-' or re.match('\d+.?\d*', v.strip())]
+    values = values[:116]
     enter_values(field_names, values, out_dict, idx)
     return out_dict
-    
-def extract_periodic_breathing(table_list, out_dict, idx):
+
+def min_o2_help(input_data, n, labels):
+    labels = [re.sub(r'\W+', '', l) for l in labels]
+    out = []
+    for i, s in enumerate(input_data):
+        if re.sub(r'\W+', '', s) in labels:
+            for j in range(n):
+                out.append(input_data[i+j+1])
+            
+                
+    return out
+
+def extract_periodic_breathing_min_o2(table_list, out_dict, idx):
     field_headers = [   
     # periodic breathing
     'periodic_breathing_entire_study',
@@ -726,24 +815,56 @@ def extract_periodic_breathing(table_list, out_dict, idx):
 
     field_names = list(np.array(field_names).reshape(2,3).T.flatten())
     
-    table = table_list[13]
-    values = table[9:11] + table[14:16] + table[19:21]
-    enter_values(field_names, values, out_dict, idx)
-    return out_dict
-
-def extract_min_o2(table_list, out_dict, idx):
-    field_names = [
+    min_o2_names = [
     'min_o2_sat_entire_study',
     'min_o2_sat_rem',
     'min_o2_sat_nrem'
     ]
     
-    table = table_list[14]
-    values = [table[7], table[12], table[17]]
+    field_names = field_names + min_o2_names
     
+    table = table_list[14]
+    
+    periodic_breathing_labels = [
+        'ENTIRE STUDY',
+        'REM',
+        'NonREM',
+        'ENTIRE STUDY ',
+        'REM',
+        'NonREM'
+    ]
+    
+    values = min_o2_help(table, 2, periodic_breathing_labels)
+    values = values[:6] + values[6:11:2]
     enter_values(field_names, values, out_dict, idx)
+    
+    if "CPAP/BiPAP" in str(table):
+        print('Warning: CPAP/BiPAP tables not supported yet.')
     return out_dict
 
+# def extract_min_o2(table_list, out_dict, idx):
+#     field_names = [
+#     'min_o2_sat_entire_study',
+#     'min_o2_sat_rem',
+#     'min_o2_sat_nrem'
+#     ]
+    
+#     table = table_list[14]
+#     values = [table[7], table[12], table[17]]
+    
+#     enter_values(field_names, values, out_dict, idx)
+#     return out_dict
+
+# TODO: One of the pdfs (LANDRY.pdf) has additional tables, may need to implement
+#       CPAP/BiPAP/O2 SUMMARY TABLE
+#       CPAP/BiPAP/O2 TABLE (REM)
+#       CPAP/BiPAP/O2 TABLE (Non-REM)
+#       CPAP/BiPAP/O2 TABLE (SUPINE)
+#       CPAP/BiPAP/O2 TABLE (Non-SUPINE)
+#       CPAP/BiPAP/O2 TABLE (REM SUPINE)
+#       CPAP/BiPAP/O2 TABLE (REM Non-SUPINE)
+#       CPAP/BiPAP/O2 TABLE (Non-REM SUPINE)
+#       CPAP/BiPAP/O2 TABLE (Non-REM Non-SUPINE)
 
 #===============================PROCESS PDF====================================================
 
@@ -806,13 +927,6 @@ def get_individual_fields(path, out_dict, idx):
 #     out_dict = extract_periodic_breathing(table_list, out_dict, idx)
 #     out_dict = extract_min_o2(table_list, out_dict, idx)
     
-    
-    
-    
-    
-    
-    
-
 def get_compound_fields(path, out_dict, idx):
     '''
     Gets all data from tables
@@ -896,6 +1010,13 @@ def get_compound_fields(path, out_dict, idx):
         print(e)
         
     try:
+        out_dict = extract_tcco2_vals(table_list, out_dict, idx)
+    except Exception as e:
+        print('error tcco2')
+        error = True
+        print(e)
+        
+    try:
         out_dict = extract_resp_events_stage(table_list, out_dict, idx)
     except Exception as e:
         print('error resp events stage')
@@ -924,18 +1045,18 @@ def get_compound_fields(path, out_dict, idx):
         print(e)
         
     try:
-        out_dict = extract_periodic_breathing(table_list, out_dict, idx)
+        out_dict = extract_periodic_breathing_min_o2(table_list, out_dict, idx)
     except Exception as e:
         print('error periodic breathing')
         error = True
         print(e)
         
-    try:
-        out_dict = extract_min_o2(table_list, out_dict, idx)
-    except Exception as e:
-        print('error min o2')
-        error = True
-        print(e)
+    # try:
+    #     out_dict = extract_min_o2(table_list, out_dict, idx)
+    # except Exception as e:
+    #     print('error min o2')
+    #     error = True
+    #     print(e)
         
     return out_dict, error
 
