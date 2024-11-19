@@ -41,7 +41,7 @@ To run the scraping script, put your pdfs in the PDFs folder
 and run:
 
 ~~~
-$ python extract_stats.py
+python extract_stats.py
 ~~~
 
 The output should appear in the out.csv file.
