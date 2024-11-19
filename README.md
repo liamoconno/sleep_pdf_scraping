@@ -12,15 +12,28 @@ and install dependencies. To do this, [first install conda](https://conda.io/pro
 Next, in Anaconda prompt navigate to the project directory and run:
 
 ~~~
-$ conda env create -f req.yml
+conda env create -f req.yml
 ~~~
 
 Then, activate the environment by running:
 
 ~~~
-$ conda activate sleep_env
+conda activate sleep_env
 ~~~
 
+## To update:
+
+In GitBash navigate to the project directory by running
+
+~~~
+cd [Path to Sleep Scraping Folder]\sleep_pdf_scraping
+~~~
+
+Then, run
+
+~~~
+git pull
+~~~
 
 ## Running the script:
 
