@@ -488,7 +488,7 @@ def extract_resp_analysis(table_list, out_dict, idx):
     # values = table_data_help(table, 11, 5, 1)
     # values = values[:12]
     # values = get_values_helper(table)
-    values = [v.strip() for v in table if v.strip() == '-' or re.match('\d+.?\d*', v.strip())]
+    values = [v.strip() for v in table if v.strip() == '-' or re.match('\d+.?\d*', v.strip()) or v.strip() == '!Zero Divide']
     values = values[1:13]
     enter_values(field_names, values, out_dict, idx)
     return out_dict
