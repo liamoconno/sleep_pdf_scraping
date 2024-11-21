@@ -514,6 +514,7 @@ def extract_baseline_ranges(table_list, out_dict, idx):
 
     field_names = ['room_air_rem_' + v for v in field_headers] + ['room_air_nrem_' + v for v in field_headers] + ['cpap_o2_rem_' + v for v in field_headers] + ['cpap_o2_nrem_' + v for v in field_headers]
     
+    field_names = list(np.array(field_names).reshape(4, len(field_headers)).T.flatten())
     
     # values = table_data_help(table, 8, 5, 1)
     # while len(values) < len(field_names):
