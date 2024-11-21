@@ -520,7 +520,7 @@ def extract_baseline_ranges(table_list, out_dict, idx):
     # while len(values) < len(field_names):
     #     values = values + ['-']
     
-    values = [v.strip() for v in table if v.strip() == '-' or re.match('\d+-?\d*', v.strip())]
+    values = [v.strip() for v in table if v.strip() == '-' or re.match('\d+-?\d*', v.strip()) or v.strip() == 'X']
 
     # Kinda hacky, deals with variations in the baseline ranges table: sometimes has an extra row, sometimes columns are not filled in
     
